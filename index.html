@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Рандомайзер обеда</title>
+  <meta name="description" content="Автоматическое распределение сотрудников по обеденным группам с циклической ротацией">
+  <meta property="og:title" content="Рандомайзер обеда">
+  <meta property="og:description" content="Автоматическое распределение сотрудников по обеденным группам с циклической ротацией">
+  <meta property="og:type" content="website">
+
+  <!-- Google Fonts: Manrope (Clean, modern sans) & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="./style.css">
+
+  <!-- Importmap for Live Server / Native Firebase Modules -->
+  <script type="importmap">
+  {
+    "imports": {
+      "firebase/app": "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Particle Burst Canvas -->
+  <canvas id="fx-canvas"></canvas>
+
+  <div class="app-container">
+    
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-row">
+        <div class="brand-icon-box">🍱</div>
+        <h1 class="brand-title">Рандомайзер обеда</h1>
+        <div class="date-pill" id="current-date-text">Загрузка даты...</div>
+      </div>
+
+      <div class="nav-actions">
+        <button class="pill-btn" onclick="openEmployeeModal()" title="Список сотрудников">
+          Сотрудники (<span id="stat-total-emp">17</span>)
+        </button>
+        <button class="pill-btn" onclick="openHistoryModal()" title="История по дням">
+          История
+        </button>
+        <button class="pill-btn" onclick="openFirebaseModal()" title="Синхронизация Firebase">
+          Firebase
+        </button>
+        <button class="pill-btn" onclick="openExportModal()" title="Файлы VS Code">
+          VS Code
+        </button>
+        <button class="pill-btn" id="sound-toggle-btn" onclick="toggleSoundFX()" title="Звук UI">
+          <span id="sound-icon">🔊</span>
+        </button>
+        <div class="live-time-chip">
+          <span class="pulse-dot"></span>
+          <span id="live-time-display">00:00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Day Navigation & Rule Strip -->
+    <div class="day-controls-row">
+      <div class="day-switch-group">
+        <button class="arrow-day-btn" onclick="navigateDate(-1)" title="Вчера">◀</button>
+        <span class="current-day-label" id="nav-day-label">Сегодня</span>
+        <button class="arrow-day-btn" onclick="navigateDate(1)" title="Завтра">▶</button>
+        <button class="arrow-day-btn" onclick="goToToday()" style="padding:6px 12px;">Сегодня</button>
+      </div>
+
+      <div class="rule-info-badge">
+        Ротация: <strong>11:00 → 12:00 → 13:00 → 11:00</strong> • Курсант зафиксирован в 3-й группе
+      </div>
+    </div>
+
+    <!-- Main View: The Big Dark Card with 3 Columns (All 6 Visible, No Scroll) -->
+    <main class="main-view">
+      <section class="dark-board-card">
+        
+        <!-- Board Top Bar -->
+        <div class="board-header">
+          <h3 class="board-title-h3" id="board-schedule-title">Распределение на день</h3>
+          <!-- Overlapping Avatar Stack -->
+          <div class="avatar-stack-wrap" id="avatar-stack-wrap"></div>
+        </div>
+
+        <!-- 3 Groups (Columns side by side) -->
+        <div class="groups-3-grid">
+          
+          <!-- Group 1: 11:00–12:00 -->
+          <div class="group-column" id="group-card-1" data-group-id="1">
+            <div class="column-top">
+              <span class="slot-time-title">11:00 – 12:00</span>
+              <span class="count-badge" id="group-count-1">0 / 6</span>
+            </div>
+            <div class="column-list" id="group-body-1">
+              <!-- Rendered by JS: 6 items fit without scroll -->
+            </div>
+            <div class="column-bottom-ratio" id="group-ratio-1">
+              <span>Баланс:</span>
+              <span>♂ 0 • ♀ 0</span>
+            </div>
+          </div>
+
+          <!-- Group 2: 12:00–13:00 -->
+          <div class="group-column" id="group-card-2" data-group-id="2">
+            <div class="column-top">
+              <span class="slot-time-title">12:00 – 13:00</span>
+              <span class="count-badge" id="group-count-2">0 / 6</span>
+            </div>
+            <div class="column-list" id="group-body-2">
+              <!-- Rendered by JS: 6 items fit without scroll -->
+            </div>
+            <div class="column-bottom-ratio" id="group-ratio-2">
+              <span>Баланс:</span>
+              <span>♂ 0 • ♀ 0</span>
+            </div>
+          </div>
+
+          <!-- Group 3: 13:00–14:00 (Accent Pink Box, Kursant Pinned) -->
+          <div class="group-column accent-slot" id="group-card-3" data-group-id="3">
+            <div class="column-top">
+              <span class="slot-time-title">13:00 – 14:00</span>
+              <span class="count-badge" id="group-count-3">0 / 6</span>
+            </div>
+            <div class="column-list" id="group-body-3">
+              <!-- Rendered by JS: 6 items fit without scroll -->
+            </div>
+            <div class="column-bottom-ratio" id="group-ratio-3">
+              <span>Курсант (Фикс)</span>
+              <span>♂ 0 • ♀ 0</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Board Footer: Summary & Actions -->
+        <div class="board-footer">
+          <div class="footer-stats-summary">
+            <span>Всего: <strong id="stat-total-emp-sub">17</strong> чел</span>
+            <span>Курсант: <strong>Закреплен (Гр.3)</strong></span>
+            <span id="schedule-status-badge">🔄 Авто-ротация</span>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn-action" onclick="resetDaySchedule()" title="Сбросить ручные изменения">
+              Вернуть исходное
+            </button>
+            <button class="btn-action" onclick="reshuffleDaySchedule(event)" title="Случайно перемешать">
+              Перемешать
+            </button>
+            <button class="btn-action-accent" onclick="handleManualSave(event)" title="Сохранить в память и облако">
+              Сохранить
+            </button>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+  </div>
+
+  <!-- Modal: Employee Management -->
+  <div class="modal-overlay" id="modal-employees">
+    <div class="modal-box">
+      <div class="modal-header-clean">
+        <h2>Сотрудники</h2>
+        <button class="modal-close-btn" onclick="closeEmployeeModal()">✕</button>
+      </div>
+
+      <div class="modal-content-clean">
+        <form id="add-employee-form" style="background:#222226; border-radius:14px; padding:12px; margin-bottom:14px;">
+          <div style="font-size:0.82rem; font-weight:800; margin-bottom:8px;">+ Добавить сотрудника</div>
+          <div style="display:grid; grid-template-columns:1fr 130px; gap:8px; margin-bottom:8px;">
+            <input type="text" id="new-emp-name" class="form-field" placeholder="Имя" required>
+            <select id="new-emp-pin" class="form-field">
+              <option value="">Без фиксации</option>
+              <option value="1">Группа 1</option>
+              <option value="2">Группа 2</option>
+              <option value="3">Группа 3</option>
+            </select>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; gap:10px; font-size:0.8rem; font-weight:700;">
+              <label style="cursor:pointer;"><input type="radio" name="new-emp-gender" value="male" checked> Мужской</label>
+              <label style="cursor:pointer;"><input type="radio" name="new-emp-gender" value="female"> Женский</label>
+            </div>
+            <button type="submit" class="btn-action-accent" style="padding:6px 14px; font-size:0.75rem;">
+              Добавить
+            </button>
+          </div>
+        </form>
+
+        <div id="emp-modal-list"></div>
+      </div>
+
+      <div class="modal-footer-clean">
+        <button class="btn-action" onclick="closeEmployeeModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: History Section -->
+  <div class="modal-overlay" id="modal-history">
+    <div class="modal-box">
+      <div class="modal-header-clean">
+        <h2>История расписаний</h2>
+        <button class="modal-close-btn" onclick="closeHistoryModal()">✕</button>
+      </div>
+
+      <div class="modal-content-clean">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+          <label style="font-size:0.82rem; font-weight:700;">Дата:</label>
+          <input type="date" id="history-date-picker" class="form-field" style="width:auto; padding:5px 10px;">
+        </div>
+        <div id="history-content-box"></div>
+      </div>
+
+      <div class="modal-footer-clean">
+        <button class="btn-action" onclick="closeHistoryModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Firebase Configuration -->
+  <div class="modal-overlay" id="modal-firebase">
+    <div class="modal-box" style="max-width:500px;">
+      <div class="modal-header-clean">
+        <h2>Firebase Firestore</h2>
+        <button class="modal-close-btn" onclick="closeFirebaseModal()">✕</button>
+      </div>
+
+      <div class="modal-content-clean">
+        <p style="font-size:0.8rem; color:#a1a1aa; margin-bottom:10px; line-height:1.4;">
+          Приложение автоматически сохраняет все данные локально. Для облачной синхронизации между устройствами вставьте JSON конфигурацию Firebase:
+        </p>
+        <textarea id="firebase-config-input" class="form-field" style="height:120px; font-family:monospace; font-size:0.75rem;" placeholder='{
+  "apiKey": "AIzaSy...",
+  "projectId": "my-app"
+}'></textarea>
+      </div>
+
+      <div class="modal-footer-clean">
+        <button class="btn-action" onclick="closeFirebaseModal()">Отмена</button>
+        <button class="btn-action-accent" onclick="saveFirebaseConfig()">Применить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: VS Code 3 Files Export -->
+  <div class="modal-overlay" id="modal-export">
+    <div class="modal-box" style="max-width:720px;">
+      <div class="modal-header-clean">
+        <h2>Файлы для VS Code (Live Server)</h2>
+        <button class="modal-close-btn" onclick="closeExportModal()">✕</button>
+      </div>
+
+      <div class="modal-content-clean">
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+          <button class="pill-btn active" id="tab-btn-index" onclick="switchCodeTab('index.html')">index.html</button>
+          <button class="pill-btn" id="tab-btn-style" onclick="switchCodeTab('style.css')">style.css</button>
+          <button class="pill-btn" id="tab-btn-script" onclick="switchCodeTab('script.js')">script.js</button>
+        </div>
+        <pre class="code-pre-view" id="code-display-pre"></pre>
+      </div>
+
+      <div class="modal-footer-clean">
+        <button class="btn-action" onclick="downloadCurrentFile()">Скачать</button>
+        <button class="btn-action-accent" onclick="copyCurrentCode()">Копировать</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Main JavaScript Engine -->
+  <script type="module" src="./script.js"></script>
+</body>
+</html>

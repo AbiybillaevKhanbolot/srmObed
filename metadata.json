@@ -1,0 +1,6 @@
+{
+  "name": "Рандомайзер обеда",
+  "description": "Автоматическое циклическое распределение сотрудников по обеденным группам с поддержкой ротации, закрепления и истории",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
